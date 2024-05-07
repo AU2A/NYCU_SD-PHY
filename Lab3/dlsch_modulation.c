@@ -1221,14 +1221,14 @@ int allocate_REs_in_RB(PHY_VARS_eNB *phy_vars_eNB,
                           Calculate the Precoding Matrix according to spec
                           Then fill into txdataF
                     */
-                    ((int16_t *)&txdataF[0][tti_offset])[0] += ((s == 1 ? xx0_re : xx1_re) >> 1);
-                    ((int16_t *)&txdataF[1][tti_offset])[0] += ((s == 1 ? xx1_re : xx0_re) >> 1);
-                    ((int16_t *)&txdataF[2][tti_offset])[0] += ((s == 1 ? xx1_re : xx0_re) >> 1);
-                    ((int16_t *)&txdataF[3][tti_offset])[0] += ((s == 1 ? xx0_re : xx1_re) >> 1);
-                    ((int16_t *)&txdataF[0][tti_offset])[1] += ((s == 1 ? xx0_im : xx1_im) >> 1);
-                    ((int16_t *)&txdataF[1][tti_offset])[1] += ((s == 1 ? xx1_im : xx0_im) >> 1);
-                    ((int16_t *)&txdataF[2][tti_offset])[1] += ((s == 1 ? xx1_im : xx0_im) >> 1);
-                    ((int16_t *)&txdataF[3][tti_offset])[1] += ((s == 1 ? xx0_im : xx1_im) >> 1);
+                    ((int16_t *)&txdataF[0][tti_offset])[0] += ((s != 1 ? xx1_re : xx0_re) >> 1);
+                    ((int16_t *)&txdataF[1][tti_offset])[0] += ((s != 1 ? xx0_re : xx1_re) >> 1);
+                    ((int16_t *)&txdataF[2][tti_offset])[0] += ((s != 1 ? xx0_re : xx1_re) >> 1);
+                    ((int16_t *)&txdataF[3][tti_offset])[0] += ((s != 1 ? xx1_re : xx0_re) >> 1);
+                    ((int16_t *)&txdataF[0][tti_offset])[1] += ((s != 1 ? xx1_im : xx0_im) >> 1);
+                    ((int16_t *)&txdataF[1][tti_offset])[1] += ((s != 1 ? xx0_im : xx1_im) >> 1);
+                    ((int16_t *)&txdataF[2][tti_offset])[1] += ((s != 1 ? xx0_im : xx1_im) >> 1);
+                    ((int16_t *)&txdataF[3][tti_offset])[1] += ((s != 1 ? xx1_im : xx0_im) >> 1);
 
                     // s alternates +1/-1 for each RE
                     s = -s;
