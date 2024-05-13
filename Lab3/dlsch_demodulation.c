@@ -1281,6 +1281,157 @@ void dlsch_channel_compensation_TM3_TX4(int **rxdataF_ext,
     int pilots = 0;
     if (symbol == 0 || symbol == 1 || symbol == 4 || symbol == 7 || symbol == 8 || symbol == 11) pilots = 1;
 
+    int *comp0 = &rxdataF_comp[0][symbol * frame_parms->N_RB_DL * 12];
+    int *comp1 = &rxdataF_comp[1][symbol * frame_parms->N_RB_DL * 12];
+
+    int *rx0 = &rxdataF_ext[0][symbol * frame_parms->N_RB_DL * 12];
+    int *rx1 = &rxdataF_ext[1][symbol * frame_parms->N_RB_DL * 12];
+
+    int *h0 = &dl_ch_estimates_ext[0][symbol * frame_parms->N_RB_DL * 12];
+    int *h1 = &dl_ch_estimates_ext[1][symbol * frame_parms->N_RB_DL * 12];
+    int *h2 = &dl_ch_estimates_ext[2][symbol * frame_parms->N_RB_DL * 12];
+    int *h3 = &dl_ch_estimates_ext[3][symbol * frame_parms->N_RB_DL * 12];
+    int *h4 = &dl_ch_estimates_ext[4][symbol * frame_parms->N_RB_DL * 12];
+    int *h5 = &dl_ch_estimates_ext[5][symbol * frame_parms->N_RB_DL * 12];
+    int *h6 = &dl_ch_estimates_ext[6][symbol * frame_parms->N_RB_DL * 12];
+    int *h7 = &dl_ch_estimates_ext[7][symbol * frame_parms->N_RB_DL * 12];
+
+    int compoffset1 = 0;  // comp[compoffset] = X[];
+    int antennaport = 0;  // 0->port0+port3, 1->port1+port2
+    int re_offset = 0;    // 與rb, re數量有關
+
+    int H1[2][2] = {0}, H2[2][2] = {0};
+    int Y1[2] = {0}, Y2[2] = {0};
+    int X1[2] = {0}, X2[2] = {0};
+
+    int rb = 0;  // for 迴圈1
+    int re = 0;  // for 迴圈2
+
+    for (rb = 0; rb < nb_rb; rb++) {
+        for (re = 0; re < 12; re++) {
+            if (pilots && (re != 1 && re != 4 && re != 7 && re != 10))
+                continue;
+
+            re_offset = rb * 12 + re;
+            if (antennaport == 0) {
+                H1[0][0] = h0[re_offset];
+                H1[0][1] = h4[re_offset];
+                H1[1][0] = h4[re_offset + 1];
+                H1[1][1] = h0[re_offset + 1];
+                H2[0][0] = h1[re_offset];
+                H2[0][1] = h5[re_offset];
+                H2[1][0] = h5[re_offset + 1];
+                H2[1][1] = h1[re_offset + 1];
+            } else {
+                H1[0][0] = h2[re_offset];
+                H1[0][1] = h6[re_offset];
+                H1[1][0] = h6[re_offset + 1];
+                H1[1][1] = h2[re_offset + 1];
+                H2[0][0] = h3[re_offset];
+                H2[0][1] = h7[re_offset];
+                H2[1][0] = h7[re_offset + 1];
+                H2[1][1] = h3[re_offset + 1];
+            }
+
+            Y1[0] = rx0[re_offset];
+            Y1[1] = rx0[re_offset + 1];
+            Y2[0] = rx1[re_offset];
+            Y2[1] = rx1[re_offset + 1];
+
+            int16_t h1[2][2][2], h2[2][2][2];
+            int16_t y1[2][2], y2[2][2];
+            double x1temp[2][2], x2temp[2][2];
+            double x1tmp[2][2], x2tmp[2][2];
+
+            y1[0][0] = Y1[0] >> 16;
+            y1[0][1] = (Y1[0] << 16) >> 16;
+            y1[1][0] = Y1[1] >> 16;
+            y1[1][1] = (Y1[1] << 16) >> 16;
+            h1[0][0][0] = H1[0][0] >> 16;
+            h1[0][0][1] = (H1[0][0] << 16) >> 16;
+            h1[0][1][0] = H1[0][1] >> 16;
+            h1[0][1][1] = (H1[0][1] << 16) >> 16;
+            h1[1][0][0] = H1[1][0] >> 16;
+            h1[1][0][1] = (H1[1][0] << 16) >> 16;
+            h1[1][1][0] = H1[1][1] >> 16;
+            h1[1][1][1] = (H1[1][1] << 16) >> 16;
+
+            y2[0][0] = Y2[0] >> 16;
+            y2[0][1] = (Y2[0] << 16) >> 16;
+            y2[1][0] = Y2[1] >> 16;
+            y2[1][1] = (Y2[1] << 16) >> 16;
+            h2[0][0][0] = H2[0][0] >> 16;
+            h2[0][0][1] = (H2[0][0] << 16) >> 16;
+            h2[0][1][0] = H2[0][1] >> 16;
+            h2[0][1][1] = (H2[0][1] << 16) >> 16;
+            h2[1][0][0] = H2[1][0] >> 16;
+            h2[1][0][1] = (H2[1][0] << 16) >> 16;
+            h2[1][1][0] = H2[1][1] >> 16;
+            h2[1][1][1] = (H2[1][1] << 16) >> 16;
+
+            x1temp[1][0] = -h1[1][0][0] * y1[0][0] - h1[1][0][1] * y1[0][1] + h1[0][0][0] * y1[1][0] + h1[0][0][1] * y1[1][1];
+            x1temp[1][1] = -h1[1][0][0] * y1[0][1] - h1[1][0][1] * y1[0][0] + h1[0][0][0] * y1[1][1] + h1[0][0][1] * y1[1][0];
+            x1temp[0][0] = h1[1][1][0] * y1[0][0] + h1[1][1][1] * y1[0][1] + h1[0][1][0] * y1[1][0] + h1[0][1][1] * y1[1][1];
+            x1temp[0][1] = -h1[1][1][1] * y1[0][0] + h1[1][1][0] * y1[0][1] + h1[0][1][0] * y1[1][0] + h1[0][1][1] * y1[1][0];
+            x2temp[1][0] = -h2[1][0][0] * y2[0][0] - h2[1][0][1] * y2[0][1] + h2[0][0][0] * y2[1][0] + h2[0][0][1] * y2[1][1];
+            x2temp[1][1] = -h2[1][0][0] * y2[0][1] - h2[1][0][1] * y2[0][0] + h2[0][0][0] * y2[1][1] + h2[0][0][1] * y2[1][0];
+            x2temp[0][0] = h2[1][1][0] * y2[0][0] + h2[1][1][1] * y2[0][1] + h2[0][1][0] * y2[1][0] + h2[0][1][1] * y2[1][1];
+            x2temp[0][1] = -h2[1][1][1] * y2[0][0] + h2[1][1][0] * y2[0][1] + h2[0][1][0] * y2[1][0] + h2[0][1][1] * y2[1][0];
+
+            // det
+            double det1[2], det2[2];
+            det1[0] = h1[0][0][0] * h1[1][1][0] + h1[0][0][1] * h1[1][1][1] + h1[1][0][0] * h1[0][1][0] + h1[1][0][1] * h1[0][1][1];
+            det1[1] = -h1[0][0][0] * h1[1][1][1] + h1[0][0][1] * h1[1][1][0] + h1[1][0][0] * h1[0][1][1] - h1[1][0][1] * h1[0][1][0];
+            det2[0] = h2[0][0][0] * h2[1][1][0] + h2[0][0][1] * h2[1][1][1] + h2[1][0][0] * h2[0][1][0] + h2[1][0][1] * h2[0][1][1];
+            det2[1] = -h2[0][0][0] * h2[1][1][1] + h2[0][0][1] * h2[1][1][0] + h2[1][0][0] * h2[0][1][1] - h2[1][0][1] * h2[0][1][0];
+
+            // mul
+            double mul1[2], mul2[2];
+            double d1, d2;
+            d1 = det1[0] * det1[0] + det1[1] * det1[1];
+            d2 = det2[0] * det2[0] + det2[1] * det2[1];
+
+            mul1[0] = det1[0] / d1;
+            mul1[1] = -det1[1] / d1;
+            mul2[0] = det2[0] / d2;
+            mul2[1] = -det2[1] / d2;
+
+            x1tmp[0][0] = mul1[0] * x1temp[0][0] - mul1[1] * x1temp[0][1];
+            x1tmp[0][1] = mul1[1] * x1temp[0][0] + mul1[0] * x1temp[0][1];
+            x1tmp[1][0] = mul1[0] * x1temp[1][0] - mul1[1] * x1temp[1][1];
+            x1tmp[1][1] = -(mul1[1] * x1temp[1][0] + mul1[0] * x1temp[1][1]);
+
+            x2tmp[0][0] = mul2[0] * x2temp[0][0] - mul2[1] * x2temp[0][1];
+            x2tmp[0][1] = mul2[1] * x2temp[0][0] + mul2[0] * x2temp[0][1];
+            x2tmp[1][0] = mul2[0] * x2temp[1][0] - mul2[1] * x2temp[1][1];
+            x2tmp[1][1] = -(mul2[1] * x2temp[1][0] + mul2[0] * x2temp[1][1]);
+
+            size_t x1[2][2], x2[2][2];
+            x1[0][0] = x1tmp[0][0];
+            x1[0][1] = x1tmp[0][1];
+            x1[1][0] = x1tmp[1][0];
+            x1[1][1] = x1tmp[1][1];
+            x2[0][0] = x2tmp[0][0];
+            x2[0][1] = x2tmp[0][1];
+            x2[1][0] = x2tmp[1][0];
+            x2[1][1] = x2tmp[1][1];
+
+            X1[0] = ((x1[0][0] >> 16) << 16) + ((x1[0][1] << 32) >> 48);
+            X1[1] = ((x1[1][0] >> 16) << 16) + ((x1[1][1] << 32) >> 48);
+            X2[0] = ((x2[0][0] >> 16) << 16) + ((x2[0][1] << 32) >> 48);
+            X2[1] = ((x2[1][0] >> 16) << 16) + ((x2[1][1] << 32) >> 48);
+
+            comp0[compoffset] = X1[0];
+            comp0[compoffset + 1] = X1[1];
+            comp1[compoffset] = X2[0];
+            comp1[compoffset + 1] = X2[1];
+
+            compoffset += 2;
+            antenna_port_set = antenna_port_set == 0 ? 1 : 0;
+            re++;
+        }
+    }
+
     int compoffset = 0;
     for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
         int *h0 = &dl_ch_estimates_ext[0 + aarx][symbol * frame_parms->N_RB_DL * 12];
@@ -1386,29 +1537,6 @@ void dlsch_channel_compensation_TM3_TX4(int **rxdataF_ext,
         }
     }
 }
-
-// int *comp0 = &rxdataF_comp[0][symbol * frame_parms->N_RB_DL * 12];
-// int *comp1 = &rxdataF_comp[1][symbol * frame_parms->N_RB_DL * 12];
-// int *rx0 = &rxdataF_ext[0][symbol * frame_parms->N_RB_DL * 12];
-// int *rx1 = &rxdataF_ext[1][symbol * frame_parms->N_RB_DL * 12];
-
-// int *h0 = &dl_ch_estimates_ext[0][symbol * frame_parms->N_RB_DL * 12];
-// int *h1 = &dl_ch_estimates_ext[1][symbol * frame_parms->N_RB_DL * 12];
-// int *h2 = &dl_ch_estimates_ext[2][symbol * frame_parms->N_RB_DL * 12];
-// int *h3 = &dl_ch_estimates_ext[3][symbol * frame_parms->N_RB_DL * 12];
-// int *h4 = &dl_ch_estimates_ext[4][symbol * frame_parms->N_RB_DL * 12];
-// int *h5 = &dl_ch_estimates_ext[5][symbol * frame_parms->N_RB_DL * 12];
-// int *h6 = &dl_ch_estimates_ext[6][symbol * frame_parms->N_RB_DL * 12];
-// int *h7 = &dl_ch_estimates_ext[7][symbol * frame_parms->N_RB_DL * 12];
-
-// int compoffset = 0;   // comp[compoffset] = X[];
-// int antennaport = 0;  // 0->port0+port3, 1->port1+port2
-// int re_offset = 0;    // 與rb, re數量有關
-// int H[2][2] = {0};
-// int Y[2] = {0};
-// int X[2] = {0};
-// int rb = 0;  // for 迴圈1
-// int re = 0;  // for 迴圈2
 
 /*
         TODO
@@ -4624,7 +4752,7 @@ unsigned short dlsch_extract_rbs_single(int **rxdataF,
                     dl_ch0_ext += 10;
                     rxF_ext += 10;
                 }  // symbol_mod==0
-            }      // rballoc==1
+            }  // rballoc==1
             else {
                 rxF = &rxdataF[aarx][((symbol * (frame_parms->ofdm_symbol_size)))];
             }
@@ -5161,8 +5289,8 @@ unsigned short dlsch_extract_rbs_dual(int **rxdataF,
                                 dl_ch1_ext += 8;
                                 rxF_ext += 8;
                             }  // skip_half==0
-                        }      // pilots==1
-                    } else {   // Do middle RB (around DC)
+                        }  // pilots==1
+                    } else {  // Do middle RB (around DC)
 
                         if (pilots == 0) {
                             memcpy(dl_ch0_ext, dl_ch0p, 6 * sizeof(int32_t));
@@ -5224,11 +5352,11 @@ unsigned short dlsch_extract_rbs_dual(int **rxdataF,
                             dl_ch1_ext += 8;
                             rxF_ext += 8;
                         }  // pilots==1
-                    }      // if Middle PRB
-                }          // if odd PRB
-            }              // if rballoc==1
-        }                  // for prb
-    }                      // for aarx
+                    }  // if Middle PRB
+                }  // if odd PRB
+            }  // if rballoc==1
+        }  // for prb
+    }  // for aarx
     return (nb_rb / frame_parms->nb_antennas_rx);
 }
 
